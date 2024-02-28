@@ -2,6 +2,7 @@
 
 namespace App\Controller;
 
+use App\Entity\Card;
 use App\Entity\User;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -14,10 +15,18 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface; //Encry
  */
 class UserController extends AbstractController
 {
+
+    private $entityManager;
+
+    public function __construct(EntityManagerInterface $entityManager)
+    {
+        $this->entityManager = $entityManager;
+    }
+
     /**
      * @Route("/user-login", name="user_login")
      */
-    public function userLogin(EntityManagerInterface $entityManager, UserPasswordHasherInterface $passwordHasher): JsonResponse
+    public function userLogin(UserPasswordHasherInterface $passwordHasher): JsonResponse
     {
         $user = new User();
 
@@ -25,14 +34,14 @@ class UserController extends AbstractController
         $password = (isset($_POST['password'])) ? $_POST['password'] : null;
 
         if($document != null){
-            $user = $entityManager->getRepository(User::class)->findBy(['document' => $document]);
+            $user = $this->entityManager->getRepository(User::class)->findBy(['document' => $document]);
         }
 
 
         if(!empty($user[0])){
 
             if (!$passwordHasher->isPasswordValid($user[0], $password)) {
-                return $this->json('El documento o contraseña no coincide.', 203, ["Content-Type" => "application/json"]);
+                return $this->json('El documento o contraseña no coincide.', 202, ["Content-Type" => "application/json"]);
             }
 
             $hashedPassword = $passwordHasher->hashPassword(
@@ -44,14 +53,14 @@ class UserController extends AbstractController
 
             $user[0]->setTokenLogin($token);
 
-            $entityManager->persist($user[0]);
-            $entityManager->flush();
+            $this->entityManager->persist($user[0]);
+            $this->entityManager->flush();
 
             return $this->json($token, 200, ["Content-Type" => "application/json"]);
 
         }else{
 
-            return $this->json('Este documento no pertenece a ningún usuario.', 203, ["Content-Type" => "application/json"]);
+            return $this->json('Este documento no pertenece a ningún usuario.', 202, ["Content-Type" => "application/json"]);
 
 
         }
@@ -63,7 +72,7 @@ class UserController extends AbstractController
     /**
      * @Route("/user-register", name="user_register")
      */
-    public function userRegister(EntityManagerInterface $entityManager, UserPasswordHasherInterface $passwordHasher): JsonResponse
+    public function userRegister(UserPasswordHasherInterface $passwordHasher): JsonResponse
     {
         $user = new User();
 
@@ -75,7 +84,13 @@ class UserController extends AbstractController
         $created_at->setTimezone(new \DateTimeZone('GMT-3'));
 
         if($document == null){
-            return $this->json('Error, debe completar el documento y contraseña.', 400, ["Content-Type" => "application/json"]);
+            return $this->json('Error, debe completar el documento y contraseña.', 202, ["Content-Type" => "application/json"]);
+        }
+
+        $user_exist = $this->entityManager->getRepository(User::class)->findBy(['document' => $document]);
+
+        if(isset($user_exist[0])){
+            return $this->json('Error, el documento ya se encuentra registrado.', 202, ["Content-Type" => "application/json"]);
         }
 
         $hashedPassword = $passwordHasher->hashPassword(
@@ -91,36 +106,58 @@ class UserController extends AbstractController
         $user->setCreatedAt($created_at);
         $user->setActive(1);
 
-        $entityManager->persist($user);
-        $entityManager->flush();
+        $this->entityManager->persist($user);
+        $this->entityManager->flush();
 
         return $this->json($user, 200, ["Content-Type" => "application/json"]);
 
     }
 
     /**
-     * @Route("/user-update", name="user_register")
+     * @Route("/user-update", name="user_update")
      */
-    public function userUpdate(EntityManagerInterface $entityManager): JsonResponse
+    public function userUpdate(): JsonResponse
     {
 
         $name = (isset($_POST['name'])) ? $_POST['name'] : null;
         $subname = (isset($_POST['subname'])) ? $_POST['subname'] : null;
         $id = (isset($_POST['id'])) ? $_POST['id'] : null;
 
-        $user = $entityManager->getRepository(User::class)->find($id);
+        if($id == null){
+            return $this->json('Error, el id no es válido.', 202, ["Content-Type" => "application/json"]);
+        }
+
+        $user = $this->entityManager->getRepository(User::class)->find($id);
+
+        $user->setName(strtoupper(trim($name)));
+        $user->setSubname(strtoupper(trim($subname)));
+
+        $this->entityManager->persist($user);
+        $this->entityManager->flush();
+
+        return $this->json($user, 200, ["Content-Type" => "application/json"]);
+
+    }
+
+    /**
+     * @Route("/user-delete", name="user_delete")
+     */
+    public function userDelete(): JsonResponse
+    {
+
+        $id = (isset($_POST['id'])) ? $_POST['id'] : null;
 
         if($id == null){
             return $this->json('Error, el id no es válido.', 400, ["Content-Type" => "application/json"]);
         }
 
-        $user->setName(strtoupper(trim($name)));
-        $user->setSubname(strtoupper(trim($subname)));
+        $user = $this->entityManager->getRepository(User::class)->find($id);
 
-        $entityManager->persist($user);
-        $entityManager->flush();
 
-        return $this->json($user, 200, ["Content-Type" => "application/json"]);
+        $this->entityManager->remove($user);
+        $this->entityManager->flush();
+
+        return $this->json('Cliente eliminado.', 200, ["Content-Type" => "application/json"]);
 
     }
 
@@ -156,7 +193,7 @@ class UserController extends AbstractController
     /**
      * @Route("/get-user", name="get_user")
      */
-    public function getUserByToken(EntityManagerInterface $entityManager): JsonResponse
+    public function getUserByToken(): JsonResponse
     {
         $token = (isset($_POST['token'])) ? $_POST['token'] : null;
 
@@ -165,7 +202,7 @@ class UserController extends AbstractController
         }
 
 
-        $data = $entityManager->getRepository(User::class)->findBy(['tokenLogin' => $token]);
+        $data = $this->entityManager->getRepository(User::class)->findBy(['tokenLogin' => $token]);
 
         $user = [];
 
@@ -188,10 +225,10 @@ class UserController extends AbstractController
     /**
      * @Route("/get-users-list", name="get_users_list")
      */
-    public function getUsersList(EntityManagerInterface $entityManager): JsonResponse
+    public function getUsersList(): JsonResponse
     {
 
-        $data = $entityManager->getRepository(User::class)->findAll();
+        $data = $this->entityManager->getRepository(User::class)->findAll();
 
         $user = [];
 
@@ -220,6 +257,132 @@ class UserController extends AbstractController
         }
 
         return $this->json($user, 200, ["Content-Type" => "application/json"]);
+
+    }
+
+
+    /**
+     * @Route("/get-cards-list", name="get_cards_list")
+     */
+    public function getCardsList(): JsonResponse
+    {
+
+        $data = $this->entityManager->getRepository(Card::class)->findAll();
+
+        $card = [];
+
+        /**
+         * @var $c Card
+         */
+
+        foreach ($data as $c) {
+
+            if($c->isActive()){
+                $card[] = array(
+                    'id' => $c->getId(),
+                    'title' => $c->getTitle(),
+                    'desc' => $c->getDescription(),
+                    'duration' => $c->getDaysLimit(),
+                    'stars' => $c->getStars()
+                );
+            }
+
+        }
+
+        return $this->json($card, 200, ["Content-Type" => "application/json"]);
+
+    }
+
+    /**
+     * @Route("/card-update", name="card_update")
+     */
+    public function cardUpdate(): JsonResponse
+    {
+
+        $title = (isset($_POST['title'])) ? $_POST['title'] : null;
+        $desc = (isset($_POST['desc'])) ? $_POST['desc'] : null;
+        $duration = (isset($_POST['duration'])) ? $_POST['duration'] : null;
+        $stars = (isset($_POST['stars'])) ? $_POST['stars'] : null;
+        $id = (isset($_POST['id'])) ? $_POST['id'] : null;
+
+        if($id == null){
+            return $this->json('Error, el id no es válido.', 202, ["Content-Type" => "application/json"]);
+        }
+
+        $card = $this->entityManager->getRepository(Card::class)->find($id);
+
+        $card->setTitle(trim($title));
+        $card->setDescription(trim($desc));
+        $card->setDaysLimit($duration);
+        $card->setStars($stars);
+
+        $this->entityManager->persist($card);
+        $this->entityManager->flush();
+
+        return $this->json($card, 200, ["Content-Type" => "application/json"]);
+
+    }
+
+
+    /**
+     * @Route("/card-delete", name="card_delete")
+     */
+    public function cardDelete(): JsonResponse
+    {
+
+        $id = (isset($_POST['id'])) ? $_POST['id'] : null;
+
+        if($id == null){
+            return $this->json('Error, el id no es válido.', 202, ["Content-Type" => "application/json"]);
+        }
+
+        $card = $this->entityManager->getRepository(Card::class)->find($id);
+        $card->setActive(0);
+
+
+        $this->entityManager->persist($card);
+        $this->entityManager->flush();
+
+        return $this->json('Tarjeta eliminada.', 200, ["Content-Type" => "application/json"]);
+
+    }
+
+
+    /**
+     * @Route("/card-create", name="card_create")
+     */
+    public function cardCreate(): JsonResponse
+    {
+
+        $title = (isset($_POST['title'])) ? $_POST['title'] : null;
+        $desc = (isset($_POST['desc'])) ? $_POST['desc'] : null;
+        $duration = (isset($_POST['duration'])) ? $_POST['duration'] : null;
+        $stars = (isset($_POST['stars'])) ? $_POST['stars'] : null;
+
+        if($title == null){
+            return $this->json('Error, el título no puede estar vacío.', 202, ["Content-Type" => "application/json"]);
+        }
+
+        if($duration == null){
+            return $this->json('Error, la duración no puede estar vacío.', 202, ["Content-Type" => "application/json"]);
+        }
+
+        if($stars == null){
+            return $this->json('Error, el número de estrellas no puede estar vacío.', 202, ["Content-Type" => "application/json"]);
+        }
+
+        $card = new Card();
+
+        $card->setTitle(trim($title));
+        $card->setDescription(trim($desc));
+        $card->setDaysLimit($duration);
+        $card->setStars($stars);
+        $card->setActive(1);
+
+        $this->entityManager->persist($card);
+        $this->entityManager->flush();
+
+        return $this->json($card, 200, ["Content-Type" => "application/json"]);
 
     }
 
