@@ -4,6 +4,7 @@ namespace App\Controller;
 
 use App\Entity\Card;
 use App\Entity\User;
+use App\Entity\UsersCard;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -17,10 +18,13 @@ class UserController extends AbstractController
 {
 
     private $entityManager;
+    private $created_at;
 
     public function __construct(EntityManagerInterface $entityManager)
     {
         $this->entityManager = $entityManager;
+        $this->created_at = new \DateTime();
+        $this->created_at->setTimezone(new \DateTimeZone('GMT-3'));
     }
 
     /**
@@ -80,8 +84,6 @@ class UserController extends AbstractController
         $subname = (isset($_POST['subname'])) ? $_POST['subname'] : null;
         $document = (isset($_POST['document'])) ? $_POST['document'] : null;
         $password = (isset($_POST['password'])) ? $_POST['password'] : null;
-        $created_at = new \DateTime();
-        $created_at->setTimezone(new \DateTimeZone('GMT-3'));
 
         if($document == null){
             return $this->json('Error, debe completar el documento y contraseña.', 202, ["Content-Type" => "application/json"]);
@@ -103,7 +105,7 @@ class UserController extends AbstractController
         $user->setDocument($document);
         $user->setPassword($hashedPassword);
         $user->setRoles(["USER"]);
-        $user->setCreatedAt($created_at);
+        $user->setCreatedAt($this->created_at);
         $user->setActive(1);
 
         $this->entityManager->persist($user);
@@ -123,7 +125,7 @@ class UserController extends AbstractController
         $subname = (isset($_POST['subname'])) ? $_POST['subname'] : null;
         $id = (isset($_POST['id'])) ? $_POST['id'] : null;
 
-        if($id == null){
+        if($id === null){
             return $this->json('Error, el id no es válido.', 202, ["Content-Type" => "application/json"]);
         }
 
@@ -135,7 +137,7 @@ class UserController extends AbstractController
         $this->entityManager->persist($user);
         $this->entityManager->flush();
 
-        return $this->json($user, 200, ["Content-Type" => "application/json"]);
+        return $this->json('Ok', 200, ["Content-Type" => "application/json"]);
 
     }
 
@@ -153,8 +155,9 @@ class UserController extends AbstractController
 
         $user = $this->entityManager->getRepository(User::class)->find($id);
 
+        $user->setActive(0);
 
-        $this->entityManager->remove($user);
+        $this->entityManager->persist($user);
         $this->entityManager->flush();
 
         return $this->json('Cliente eliminado.', 200, ["Content-Type" => "application/json"]);
@@ -250,10 +253,46 @@ class UserController extends AbstractController
                     'id' => $u->getId(),
                     'document' => $primeraParte.'.'.$segundaParte.'.'.$terceraParte.'-'.$cuartaParte,
                     'name' => $u->getName(),
-                    'subname' => (($u->getSubname()) ? ' ' . $u->getSubname() : '')
+                    'subname' => (($u->getSubname()) ? ' ' . $u->getSubname() : ''),
+                    'active' => $u->isActive()
                 );
             }
 
+        }
+
+        return $this->json($user, 200, ["Content-Type" => "application/json"]);
+
+    }
+
+    /**
+     * @Route("/get-user-id", name="get_user_id")
+     */
+    public function getUser(): JsonResponse
+    {
+
+        $id = (isset($_POST['id'])) ? $_POST['id'] : null;
+
+        if($id === null){
+            return $this->json('Error, debe enviar el id como parámetro.', 202, ["Content-Type" => "application/json"]);
+        }
+
+        $user = [];
+        $user_class = $this->entityManager->getRepository(User::class)->find($id);
+
+        $document = $user_class->getDocument();
+        $primeraParte = substr($document,0,1);
+        $segundaParte = substr($document,1,3);
+        $terceraParte = substr($document,4,3);
+        $cuartaParte = substr($document,7,1);
+
+        //Solo almaceno los usuarios que contengan el rol de USER
+        if (in_array('USER', $user_class->getRoles(), true)) {
+            $user = array(
+                'id' => $user_class->getId(),
+                'document' => $primeraParte.'.'.$segundaParte.'.'.$terceraParte.'-'.$cuartaParte,
+                'name' => $user_class->getName(),
+                'subname' => (($user_class->getSubname()) ? $user_class->getSubname() : '')
+            );
         }
 
         return $this->json($user, 200, ["Content-Type" => "application/json"]);
@@ -284,6 +323,52 @@ class UserController extends AbstractController
                     'desc' => $c->getDescription(),
                     'duration' => $c->getDaysLimit(),
                     'stars' => $c->getStars()
+                );
+            }
+
+        }
+
+        return $this->json($card, 200, ["Content-Type" => "application/json"]);
+
+    }
+
+    /**
+     * @Route("/get-user-cards-list", name="get_user_cards_list")
+     */
+    public function getUserCardsList(): JsonResponse
+    {
+
+        $client_id = (isset($_POST['client_id'])) ? $_POST['client_id'] : null;
+
+        $data = $this->entityManager->getRepository(UsersCard::class)->findBy(['user'=>$client_id]);
+
+        $card = [];
+
+        $date_now = strtotime($this->created_at->format('Y-m-d'));
+
+
+        /**
+         * @var $c Card
+         */
+
+        foreach ($data as $c) {
+
+            $date_card = $c->getCreatedAt()->format('Y-m-d');
+
+            $date_append = strtotime(date("d-m-Y",strtotime($date_card."+ ". $c->getCard()->getDaysLimit() ." days")));
+
+            $datediff = $date_append - $date_now;
+
+            if($c->isActive()){
+                $card[] = array(
+                    'id_assigned' => $c->getId(),
+                    'client_name' => $c->getUser()->getName() . (($c->getUser()->getSubname()) ? ' ' . $c->getUser()->getSubname() : ''),
+                    'title' => $c->getCard()->getTitle(),
+                    'desc' => $c->getCard()->getDescription(),
+                    'duration' => $c->getCard()->getDaysLimit(),
+                    'stars' => $c->getCard()->getStars(),
+                    'marked_stars' => $c->getStars(),
+                    'datediff' => round($datediff / (60 * 60 * 24))
                 );
             }
 
@@ -383,6 +468,36 @@ class UserController extends AbstractController
         $this->entityManager->flush();
 
         return $this->json($card, 200, ["Content-Type" => "application/json"]);
+
+    }
+
+    /**
+     * @Route("/card-assign", name="card_assign")
+     */
+    public function cardAssign(): JsonResponse
+    {
+
+        $card_id = (isset($_POST['card_id'])) ? $_POST['card_id'] : null;
+        $client_id = (isset($_POST['client_id'])) ? $_POST['client_id'] : null;
+
+        if($card_id == null || $client_id == null){
+            return $this->json('Error, verifique los datos enviados.', 202, ["Content-Type" => "application/json"]);
+        }
+
+        $card = $this->entityManager->getRepository(Card::class)->find($card_id);
+        $client = $this->entityManager->getRepository(User::class)->find($client_id);
+
+        $new_assign = new UsersCard();
+        $new_assign->setCard($card);
+        $new_assign->setUser($client);
+        $new_assign->setStars(0);
+        $new_assign->setCreatedAt($this->created_at);
+        $new_assign->setActive(1);
+
+        $this->entityManager->persist($new_assign);
+        $this->entityManager->flush();
+
+        return $this->json($new_assign->getId(), 200, ["Content-Type" => "application/json"]);
 
     }
 
