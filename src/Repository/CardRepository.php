@@ -3,7 +3,10 @@
 namespace App\Repository;
 
 use App\Entity\Card;
+use App\Entity\User;
+use App\Entity\UsersCard;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
+use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\Persistence\ManagerRegistry;
 
 /**
@@ -37,6 +40,28 @@ class CardRepository extends ServiceEntityRepository
         if ($flush) {
             $this->getEntityManager()->flush();
         }
+    }
+
+    public function getCardsUsers(EntityManagerInterface $entityManager, $client_id): array{
+
+        $qb = $entityManager->createQueryBuilder();
+
+        $qbActiveUsers = $entityManager->createQueryBuilder();
+        $qbInactiveUsers = $entityManager->createQueryBuilder();
+
+        $qb->select('c')
+            ->from(Card::class, 'c')
+            ->leftJoin(UsersCard::class, 'uc', 'WITH', 'uc.card = c.id AND uc.user = :user_id')
+            ->where('c.active = 1')
+            ->andWhere($qb->expr()->orX(
+                $qb->expr()->isNull('uc.id')
+            ))
+            ->setParameter('user_id', $client_id);
+
+        $query = $qb->getQuery();
+
+        return $query->getResult();
+
     }
 
 //    /**

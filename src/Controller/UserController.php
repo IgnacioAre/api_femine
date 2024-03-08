@@ -142,12 +142,13 @@ class UserController extends AbstractController
     }
 
     /**
-     * @Route("/user-delete", name="user_delete")
+     * @Route("/user-change-state", name="user_change_state")
      */
-    public function userDelete(): JsonResponse
+    public function userChangeState(): JsonResponse
     {
 
         $id = (isset($_POST['id'])) ? $_POST['id'] : null;
+        $active = (isset($_POST['active'])) ? $_POST['active'] : null;
 
         if($id == null){
             return $this->json('Error, el id no es válido.', 400, ["Content-Type" => "application/json"]);
@@ -155,7 +156,7 @@ class UserController extends AbstractController
 
         $user = $this->entityManager->getRepository(User::class)->find($id);
 
-        $user->setActive(0);
+        $user->setActive($active);
 
         $this->entityManager->persist($user);
         $this->entityManager->flush();
@@ -215,6 +216,7 @@ class UserController extends AbstractController
 
         foreach ($data as $u) {
 
+            $user['id'] = $u->getId();
             $user['document'] = $u->getDocument();
             $user['name'] = $u->getName() . (($u->getSubname()) ? ' ' . $u->getSubname() : '');
             $user['rol'] = $u->getRoles()[0];
@@ -248,12 +250,12 @@ class UserController extends AbstractController
             $cuartaParte = substr($document,7,1);
 
             //Solo almaceno los usuarios que contengan el rol de USER
-            if (in_array('USER', $u->getRoles(), true)) {
+            if (in_array('USER', $u->getRoles(), true) && $u->isActive()) {
                 $user[] = array(
                     'id' => $u->getId(),
                     'document' => $primeraParte.'.'.$segundaParte.'.'.$terceraParte.'-'.$cuartaParte,
                     'name' => $u->getName(),
-                    'subname' => (($u->getSubname()) ? ' ' . $u->getSubname() : ''),
+                    'subname' => (($u->getSubname()) ? $u->getSubname() : ''),
                     'active' => $u->isActive()
                 );
             }
@@ -333,6 +335,42 @@ class UserController extends AbstractController
     }
 
     /**
+     * @Route("/get-cards-users", name="get_cards_users")
+     */
+    public function getCardsUsers(): JsonResponse
+    {
+        $client_id = (isset($_POST['client_id'])) ? $_POST['client_id'] : null;
+
+        if($client_id == null){
+            return $this->json('Error, el id del cliente no es válido.', 202, ["Content-Type" => "application/json"]);
+        }
+
+        $card = [];
+        $data = $this->entityManager->getRepository(Card::class)->getCardsUsers($this->entityManager,$client_id);
+
+        /**
+         * @var $c Card
+         */
+
+        foreach ($data as $c) {
+
+            if($c->isActive()){
+                $card[] = array(
+                    'id' => $c->getId(),
+                    'title' => $c->getTitle(),
+                    'desc' => $c->getDescription(),
+                    'duration' => $c->getDaysLimit(),
+                    'stars' => $c->getStars()
+                );
+            }
+
+        }
+
+        return $this->json($card, 200, ["Content-Type" => "application/json"]);
+
+    }
+
+    /**
      * @Route("/get-user-cards-list", name="get_user_cards_list")
      */
     public function getUserCardsList(): JsonResponse
@@ -348,18 +386,18 @@ class UserController extends AbstractController
 
 
         /**
-         * @var $c Card
+         * @var $c UsersCard
          */
 
         foreach ($data as $c) {
 
-            $date_card = $c->getCreatedAt()->format('Y-m-d');
+            if($c->getCard()->isActive()){
+                $date_card = $c->getCreatedAt()->format('Y-m-d');
 
-            $date_append = strtotime(date("d-m-Y",strtotime($date_card."+ ". $c->getCard()->getDaysLimit() ." days")));
+                $date_append = strtotime(date("d-m-Y",strtotime($date_card."+ ". $c->getCard()->getDaysLimit() ." days")));
 
-            $datediff = $date_append - $date_now;
+                $datediff = $date_append - $date_now;
 
-            if($c->isActive()){
                 $card[] = array(
                     'id_assigned' => $c->getId(),
                     'client_name' => $c->getUser()->getName() . (($c->getUser()->getSubname()) ? ' ' . $c->getUser()->getSubname() : ''),
@@ -492,12 +530,61 @@ class UserController extends AbstractController
         $new_assign->setUser($client);
         $new_assign->setStars(0);
         $new_assign->setCreatedAt($this->created_at);
-        $new_assign->setActive(1);
 
         $this->entityManager->persist($new_assign);
         $this->entityManager->flush();
 
         return $this->json($new_assign->getId(), 200, ["Content-Type" => "application/json"]);
+
+    }
+
+
+    /**
+     * @Route("/number-card-update", name="number_card_update")
+     */
+    public function numberCardUpdate(): JsonResponse
+    {
+
+        $id_assigned = (isset($_POST['id_assigned'])) ? $_POST['id_assigned'] : null;
+        $position = (isset($_POST['position'])) ? $_POST['position'] : null;
+
+        if($id_assigned == null){
+            return $this->json('Error, el id no es válido.', 202, ["Content-Type" => "application/json"]);
+        }
+
+        if($position == null){
+            return $this->json('Error, el número de las estrellas no es válido.', 202, ["Content-Type" => "application/json"]);
+        }
+
+        $user_card = $this->entityManager->getRepository(UsersCard::class)->find($id_assigned);
+
+        $user_card->setStars($position);
+
+        $this->entityManager->persist($user_card);
+        $this->entityManager->flush();
+
+        return $this->json($position, 200, ["Content-Type" => "application/json"]);
+
+    }
+
+    /**
+     * @Route("/card-assigned-delete", name="card_assigned_delete")
+     */
+    public function cardAssignedDelete(): JsonResponse
+    {
+
+        $id_assigned = (isset($_POST['id_assigned'])) ? $_POST['id_assigned'] : null;
+
+        if($id_assigned == null){
+            return $this->json('Error, el id no es válido.', 202, ["Content-Type" => "application/json"]);
+        }
+
+        $card = $this->entityManager->getRepository(UsersCard::class)->find($id_assigned);
+
+        $this->entityManager->remove($card);
+        $this->entityManager->flush();
+
+        return $this->json('Tarjeta eliminada.', 200, ["Content-Type" => "application/json"]);
 
     }
 

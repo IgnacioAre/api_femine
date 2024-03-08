@@ -39,10 +39,6 @@ class UsersCard
      */
     private $stars;
 
-    /**
-     * @ORM\Column(type="boolean", nullable=true, options={"default" : 1})
-     */
-    private $active;
 
     public function getId(): ?int
     {
@@ -93,18 +89,6 @@ class UsersCard
     public function setStars(int $stars): self
     {
         $this->stars = $stars;
-
-        return $this;
-    }
-
-    public function isActive(): ?bool
-    {
-        return $this->active;
-    }
-
-    public function setActive(bool $active): self
-    {
-        $this->active = $active;
 
         return $this;
     }
