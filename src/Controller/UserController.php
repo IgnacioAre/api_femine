@@ -9,7 +9,9 @@ use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Routing\Annotation\Route;
-use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface; //Encrypt password
+use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
+
+//Encrypt password
 
 /**
  * @Route("/api", name="api_")
@@ -322,9 +324,10 @@ class UserController extends AbstractController
                 $card[] = array(
                     'id' => $c->getId(),
                     'title' => $c->getTitle(),
-                    'desc' => $c->getDescription(),
+                    'desc' => (!empty($c->getDescription()) ? $c->getDescription() : ''),
                     'duration' => $c->getDaysLimit(),
-                    'stars' => $c->getStars()
+                    'stars' => $c->getStars(),
+                    'type' => $c->getType()
                 );
             }
 
@@ -358,7 +361,7 @@ class UserController extends AbstractController
                 $card[] = array(
                     'id' => $c->getId(),
                     'title' => $c->getTitle(),
-                    'desc' => $c->getDescription(),
+                    'desc' => (!empty($c->getDescription()) ? $c->getDescription() : ''),
                     'duration' => $c->getDaysLimit(),
                     'stars' => $c->getStars()
                 );
@@ -402,11 +405,15 @@ class UserController extends AbstractController
                     'id_assigned' => $c->getId(),
                     'client_name' => $c->getUser()->getName() . (($c->getUser()->getSubname()) ? ' ' . $c->getUser()->getSubname() : ''),
                     'title' => $c->getCard()->getTitle(),
-                    'desc' => $c->getCard()->getDescription(),
+                    'desc' => (!empty($c->getCard()->getDescription()) ? $c->getCard()->getDescription() : ''),
                     'duration' => $c->getCard()->getDaysLimit(),
                     'stars' => $c->getCard()->getStars(),
+                    'type' => $c->getCard()->getType(),
                     'marked_stars' => $c->getStars(),
-                    'datediff' => round($datediff / (60 * 60 * 24))
+                    'date_create' => $c->getCreatedAt()->format('d/m/Y'),
+                    'datediff' => round($datediff / (60 * 60 * 24)),
+                    'date_valide' => date("d/m/Y",$date_append),
+                    'message_giftcard' => $c->getGiftcardMessage()
                 );
             }
 
@@ -422,11 +429,12 @@ class UserController extends AbstractController
     public function cardUpdate(): JsonResponse
     {
 
+        $id = (isset($_POST['id'])) ? $_POST['id'] : null;
         $title = (isset($_POST['title'])) ? $_POST['title'] : null;
         $desc = (isset($_POST['desc'])) ? $_POST['desc'] : null;
+        $type = (isset($_POST['type'])) ? $_POST['type'] : null;
         $duration = (isset($_POST['duration'])) ? $_POST['duration'] : null;
         $stars = (isset($_POST['stars'])) ? $_POST['stars'] : null;
-        $id = (isset($_POST['id'])) ? $_POST['id'] : null;
 
         if($id == null){
             return $this->json('Error, el id no es válido.', 202, ["Content-Type" => "application/json"]);
@@ -438,11 +446,12 @@ class UserController extends AbstractController
         $card->setDescription(trim($desc));
         $card->setDaysLimit($duration);
         $card->setStars($stars);
+        $card->setType($type);
 
         $this->entityManager->persist($card);
         $this->entityManager->flush();
 
-        return $this->json($card, 200, ["Content-Type" => "application/json"]);
+        return $this->json($card->getId(), 200, ["Content-Type" => "application/json"]);
 
     }
 
@@ -479,6 +488,7 @@ class UserController extends AbstractController
 
         $title = (isset($_POST['title'])) ? $_POST['title'] : null;
         $desc = (isset($_POST['desc'])) ? $_POST['desc'] : null;
+        $type = (isset($_POST['type'])) ? $_POST['type'] : null;
         $duration = (isset($_POST['duration'])) ? $_POST['duration'] : null;
         $stars = (isset($_POST['stars'])) ? $_POST['stars'] : null;
 
@@ -494,10 +504,15 @@ class UserController extends AbstractController
             return $this->json('Error, el número de estrellas no puede estar vacío.', 202, ["Content-Type" => "application/json"]);
         }
 
+        if($type == null){
+            return $this->json('Error, el tipo de tarjeta no puede estar vacío.', 202, ["Content-Type" => "application/json"]);
+        }
+
         $card = new Card();
 
         $card->setTitle(trim($title));
         $card->setDescription(trim($desc));
+        $card->setType($type);
         $card->setDaysLimit($duration);
         $card->setStars($stars);
         $card->setActive(1);
@@ -529,6 +544,7 @@ class UserController extends AbstractController
         $new_assign->setCard($card);
         $new_assign->setUser($client);
         $new_assign->setStars(0);
+        $new_assign->setGiftcardStatus(0);
         $new_assign->setCreatedAt($this->created_at);
 
         $this->entityManager->persist($new_assign);
@@ -585,6 +601,30 @@ class UserController extends AbstractController
         $this->entityManager->flush();
 
         return $this->json('Tarjeta eliminada.', 200, ["Content-Type" => "application/json"]);
+
+    }
+
+
+    /**
+     * @Route("/update-message-giftcard", name="update_message_giftcard")
+     */
+    public function updateMessageGiftcard(): JsonResponse
+    {
+
+        $id_assigned = (isset($_POST['id_assigned'])) ? $_POST['id_assigned'] : null;
+        $message = (isset($_POST['message'])) ? $_POST['message'] : null;
+
+        if($id_assigned == null){
+            return $this->json('Error, el id no es válido.', 202, ["Content-Type" => "application/json"]);
+        }
+
+        $card = $this->entityManager->getRepository(UsersCard::class)->find($id_assigned);
+        $card->setGiftcardMessage($message);
+
+        $this->entityManager->persist($card);
+        $this->entityManager->flush();
+
+        return $this->json($card->getId(), 200, ["Content-Type" => "application/json"]);
 
     }
 

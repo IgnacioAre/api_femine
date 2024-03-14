@@ -39,6 +39,16 @@ class UsersCard
      */
     private $stars;
 
+    /**
+     * @ORM\Column(type="string", length=255, nullable=true)
+     */
+    private $giftcard_message;
+
+    /**
+     * @ORM\Column(type="boolean")
+     */
+    private $giftcard_status;
+
 
     public function getId(): ?int
     {
@@ -89,6 +99,30 @@ class UsersCard
     public function setStars(int $stars): self
     {
         $this->stars = $stars;
+
+        return $this;
+    }
+
+    public function getGiftcardMessage(): ?string
+    {
+        return $this->giftcard_message;
+    }
+
+    public function setGiftcardMessage(?string $giftcard_message): self
+    {
+        $this->giftcard_message = $giftcard_message;
+
+        return $this;
+    }
+
+    public function isGiftcardStatus(): ?bool
+    {
+        return $this->giftcard_status;
+    }
+
+    public function setGiftcardStatus(bool $giftcard_status): self
+    {
+        $this->giftcard_status = $giftcard_status;
 
         return $this;
     }

@@ -54,9 +54,13 @@ class CardRepository extends ServiceEntityRepository
             ->leftJoin(UsersCard::class, 'uc', 'WITH', 'uc.card = c.id AND uc.user = :user_id')
             ->where('c.active = 1')
             ->andWhere($qb->expr()->orX(
-                $qb->expr()->isNull('uc.id')
+                $qb->expr()->isNull('uc.id'),
+                $qb->expr()->andX(
+                    $qb->expr()->eq('c.type', ':card_type')
+                )
             ))
-            ->setParameter('user_id', $client_id);
+            ->setParameter('user_id', $client_id)
+            ->setParameter('card_type', 'Giftcard');
 
         $query = $qb->getQuery();
 
