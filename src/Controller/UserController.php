@@ -414,7 +414,8 @@ class UserController extends AbstractController
                     'date_create' => $c->getCreatedAt()->format('d/m/Y'),
                     'datediff' => round($datediff / (60 * 60 * 24)),
                     'date_valide' => date("d/m/Y",$date_append),
-                    'message_giftcard' => $c->getGiftcardMessage()
+                    'message_giftcard' => $c->getGiftcardMessage(),
+                    'status_giftcard' => $c->isGiftcardStatus()
                 );
             }
 
@@ -628,5 +629,29 @@ class UserController extends AbstractController
         return $this->json($card->getId(), 200, ["Content-Type" => "application/json"]);
 
     }
+
+
+    /**
+     * @Route("/update-used-giftcard", name="update_used_giftcard")
+     */
+    public function updateUsedGiftcard(): JsonResponse
+    {
+
+        $id_assigned = (isset($_POST['id_assigned'])) ? $_POST['id_assigned'] : null;
+
+        if($id_assigned == null){
+            return $this->json('Error, el id no es válido.', 202, ["Content-Type" => "application/json"]);
+        }
+
+        $card = $this->entityManager->getRepository(UsersCard::class)->find($id_assigned);
+        $card->setGiftcardStatus(1);
+
+        $this->entityManager->persist($card);
+        $this->entityManager->flush();
+
+        return $this->json($card->getId(), 200, ["Content-Type" => "application/json"]);
+
+    }
+
 
 }
