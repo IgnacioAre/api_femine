@@ -327,7 +327,7 @@ class UserController extends AbstractController
                     'desc' => (!empty($c->getDescription()) ? $c->getDescription() : ''),
                     'duration' => $c->getDaysLimit(),
                     'stars' => $c->getStars(),
-                    'type' => $c->getType()
+                    'type' => $c->getType(),
                 );
             }
 
@@ -363,7 +363,8 @@ class UserController extends AbstractController
                     'title' => $c->getTitle(),
                     'desc' => (!empty($c->getDescription()) ? $c->getDescription() : ''),
                     'duration' => $c->getDaysLimit(),
-                    'stars' => $c->getStars()
+                    'stars' => $c->getStars(),
+                    'type' => $c->getType()
                 );
             }
 
