@@ -18,13 +18,13 @@ class UsersCard
     private $id;
 
     /**
-     * @ORM\ManyToOne(targetEntity=user::class, inversedBy="usersCards")
+     * @ORM\ManyToOne(targetEntity=User::class, inversedBy="usersCards")
      * @ORM\JoinColumn(nullable=false)
      */
     private $user;
 
     /**
-     * @ORM\ManyToOne(targetEntity=card::class, inversedBy="usersCards")
+     * @ORM\ManyToOne(targetEntity=Card::class, inversedBy="usersCards")
      * @ORM\JoinColumn(nullable=false)
      */
     private $card;
