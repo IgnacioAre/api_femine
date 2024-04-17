@@ -220,7 +220,8 @@ class UserController extends AbstractController
 
             $user['id'] = $u->getId();
             $user['document'] = $u->getDocument();
-            $user['name'] = $u->getName() . (($u->getSubname()) ? ' ' . $u->getSubname() : '');
+            $user['name'] = $u->getName();
+            $user['subname'] = (($u->getSubname()) ? ' ' . $u->getSubname() : '');
             $user['rol'] = $u->getRoles()[0];
         }
 
